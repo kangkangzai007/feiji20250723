@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+S<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>飞机大战网页版</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      text-align: center;
+      margin: 0;
+      background-color: #000;
+      color: #fff;
+    }
+    #login, #game-over {
+      margin-top: 100px;
+    }
+    canvas {
+      background: #111;
+      display: block;
+      margin: 20px auto;
+      border: 2px solid #fff;
+    }
+    #hud {
+      position: absolute;
+      top: 10px;
+      right: 20px;
+      text-align: right;
+    }
+    input {
+      padding: 5px;
+      margin: 5px;
+    }
+    button {
+      padding: 5px 15px;
+      margin: 10px;
+    }
+  </style>
+</head>
+<body>
+
+<div id="login">
+  <h1>飞机大战注册 / 登录</h1>
+  <input type="text" id="username" placeholder="账号"><br>
+  <input type="password" id="password" placeholder="密码"><br>
+  <button onclick="register()">注册开始</button>
+  <button onclick="login()">登录开始</button>
+  <p id="message"></p>
+</div>
+
+<div id="hud" style="display:none">
+  <div>账号：<span id="hud-username"></span></div>
+  <div>生命：<span id="hud-lives">❤️❤️❤️</span></div>
+  <div>分数：<span id="hud-score">0</span></div>
+</div>
+
+<canvas id="gameCanvas" width="400" height="600" style="display:none"></canvas>
+
+<div id="game-over" style="display:none">
+  <h1>游戏结束</h1>
+  <p>你的得分是：<span id="final-score"></span></p>
+  <button onclick="restart()">再来一局</button>
+</div>
+
+<script>
+  let users = {}; // 储存账号密码
+  let currentUser = '';
+  let score = 0;
+  let lives = 3;
+
+  const canvas = document.getElementById('gameCanvas');
+  const ctx = canvas.getContext('2d');
+  let player = { x: 180, y: 550, width: 40, height: 40 };
+  let bullets = [];
+  let enemies = [];
+
+  function register() {
+    const user = document.getElementById('username').value;
+    const pass = document.getElementById('password').value;
+    if (users[user]) {
+      document.getElementById('message').textContent = '账号已存在，请登录';
+    } else {
+      users[user] = pass;
+      login();
+    }
+  }
+
+  function login() {
+    const user = document.getElementById('username').value;
+    const pass = document.getElementById('password').value;
+    if (users[user] === pass) {
+      currentUser = user;
+      startGame();
+    } else {
+      document.getElementById('message').textContent = '账号或密码错误';
+    }
+  }
+
+  function startGame() {
+    score = 0;
+    lives = 3;
+    bullets = [];
+    enemies = [];
+    document.getElementById('login').style.display = 'none';
+    document.getElementById('game-over').style.display = 'none';
+    document.getElementById('gameCanvas').style.display = 'block';
+    document.getElementById('hud').style.display = 'block';
+    document.getElementById('hud-username').textContent = currentUser;
+    updateHUD();
+    requestAnimationFrame(gameLoop);
+    spawnEnemies();
+  }
+
+  function updateHUD() {
+    document.getElementById('hud-score').textContent = score;
+    document.getElementById('hud-lives').textContent = '❤️'.repeat(lives);
+  }
+
+  function drawPlayer() {
+    ctx.fillStyle = 'lightblue';
+    ctx.fillRect(player.x, player.y, player.width, player.height);
+  }
+
+  function drawBullets() {
+    ctx.fillStyle = 'yellow';
+    bullets.forEach(b => ctx.fillRect(b.x, b.y, 4, 10));
+  }
+
+  function drawEnemies() {
+    enemies.forEach(e => {
+      if (e.type === 'small') ctx.fillStyle = 'green';
+      else if (e.type === 'medium') ctx.fillStyle = 'orange';
+      else ctx.fillStyle = 'red';
+      ctx.fillRect(e.x, e.y, e.size, e.size);
+    });
+  }
+
+  function moveBullets() {
+    bullets.forEach(b => b.y -= 5);
+    bullets = bullets.filter(b => b.y > 0);
+  }
+
+  function moveEnemies() {
+    enemies.forEach(e => e.y += e.speed);
+    enemies = enemies.filter(e => e.y < canvas.height);
+  }
+
+  function detectHits() {
+    bullets.forEach((b, bi) => {
+      enemies.forEach((e, ei) => {
+        if (b.x > e.x && b.x < e.x + e.size &&
+            b.y > e.y && b.y < e.y + e.size) {
+          bullets.splice(bi, 1);
+          enemies.splice(ei, 1);
+          score += e.points;
+          updateHUD();
+        }
+      });
+    });
+
+    enemies.forEach((e, ei) => {
+      if (e.x < player.x + player.width &&
+          e.x + e.size > player.x &&
+          e.y < player.y + player.height &&
+          e.y + e.size > player.y) {
+        enemies.splice(ei, 1);
+        score -= e.points;
+        if (score < 0) {
+          score = 0;
+          lives -= 1;
+        }
+        updateHUD();
+        if (lives <= 0) endGame();
+      }
+    });
+  }
+
+  function endGame() {
+    document.getElementById('final-score').textContent = score;
+    document.getElementById('game-over').style.display = 'block';
+    document.getElementById('gameCanvas').style.display = 'none';
+    document.getElementById('hud').style.display = 'none';
+  }
+
+  function spawnEnemies() {
+    setInterval(() => {
+      const rand = Math.random();
+      let type = 'small';
+      let size = 20;
+      let speed = 2;
+      let points = 20;
+      if (rand > 0.7 && rand <= 0.9) {
+        type = 'medium'; size = 30; speed = 1.5; points = 50;
+      } else if (rand > 0.9) {
+        type = 'large'; size = 40; speed = 1; points = 100;
+      }
+      enemies.push({
+        x: Math.random() * (canvas.width - size),
+        y: -size,
+        size: size,
+        speed: speed,
+        type: type,
+        points: points
+      });
+    }, 1000);
+  }
+
+  function gameLoop() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    drawPlayer();
+    drawBullets();
+    drawEnemies();
+    moveBullets();
+    moveEnemies();
+    detectHits();
+    if (lives > 0) requestAnimationFrame(gameLoop);
+  }
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowLeft' && player.x > 0) player.x -= 10;
+    if (e.key === 'ArrowRight' && player.x < canvas.width - player.width) player.x += 10;
+    if (e.key === ' ' || e.key === 'ArrowUp') {
+      bullets.push({ x: player.x + player.width / 2, y: player.y });
+    }
+  });
+
+  function restart() {
+    startGame();
+  }
+</script>
+
+</body>
+</html>
